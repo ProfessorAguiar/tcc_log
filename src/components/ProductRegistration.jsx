@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import "./ProductRegistration.css";
 
-export default function ProductRegistration({ onProductAdded }) {
+export default function ProductRegistration({
+  onProductAdded,
+  products,
+  setProducts
+}) {
   const [formData, setFormData] = useState({
     nome: "",
     registro: "",
@@ -16,10 +20,9 @@ export default function ProductRegistration({ onProductAdded }) {
   });
 
   const [useVolume, setUseVolume] = useState(true);
-  const [products, setProducts] = useState([]);
   const [message, setMessage] = useState(null);
   const [showForm, setShowForm] = useState(true);
-
+  const API_URL = "http://localhost:5500/produtos";
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -27,14 +30,41 @@ export default function ProductRegistration({ onProductAdded }) {
       [name]: value,
     }));
   };
+  useEffect(() => {
+    carregarProdutos();
+  }, []);
 
+  async function carregarProdutos() {
+    try {
+
+      const response = await fetch(API_URL);
+
+      const data = await response.json();
+
+      const produtosFormatados = data.map((produto) => ({
+        id: produto.SKU,
+        nome: produto.pNome,
+        registro: produto.SKU,
+        volume: produto.pVolume,
+        descricao: produto.pDescricao,
+        dataRegistro: produto.Data,
+      }));
+
+      setProducts(produtosFormatados);
+
+    } catch (error) {
+
+      console.error(error);
+
+      setMessage({
+        type: "error",
+        text: "Erro ao carregar produtos",
+      });
+    }
+  }
   const validateForm = () => {
     if (!formData.nome.trim()) {
       setMessage({ type: "error", text: "Nome da mercadoria é obrigatório" });
-      return false;
-    }
-    if (!formData.registro.trim()) {
-      setMessage({ type: "error", text: "Nº de Registro é obrigatório" });
       return false;
     }
 
@@ -56,61 +86,144 @@ export default function ProductRegistration({ onProductAdded }) {
 
     return true;
   };
+  async function gerarSKUUnico() {
 
-  const handleSubmit = (e) => {
+    const caracteres = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    while (true) {
+
+      let sku = "";
+
+      for (let i = 0; i < 8; i++) {
+
+        const indice = Math.floor(
+          Math.random() * caracteres.length
+        );
+
+        sku += caracteres[indice];
+      }
+
+      const response = await fetch(`${API_URL}/${sku}`);
+
+      if (response.status === 404) {
+        return sku;
+      }
+    }
+  }
+
+  const handleSubmit = async (e) => {
+
     e.preventDefault();
 
     if (!validateForm()) {
       return;
     }
 
-    let calculatedVolume = useVolume ? parseFloat(formData.volume) : null;
+    try {
 
-    if (!useVolume) {
-      const comp = parseFloat(formData.comprimento);
-      const larg = parseFloat(formData.largura);
-      const alt = parseFloat(formData.altura);
-      calculatedVolume = (comp * larg * alt) / 1000000; // Converter cm³ para m³
+      let calculatedVolume = useVolume
+        ? parseFloat(formData.volume)
+        : null;
+
+      if (!useVolume) {
+
+        const comp = parseFloat(formData.comprimento);
+        const larg = parseFloat(formData.largura);
+        const alt = parseFloat(formData.altura);
+
+        calculatedVolume = (comp * larg * alt) / 1000000;
+      }
+
+      const skuGerado = await gerarSKUUnico();
+
+      const newProduct = {
+
+        SKU: skuGerado,
+        pNome: formData.nome,
+        pVolume: calculatedVolume,
+        pDescricao: formData.descricao,
+      };
+
+      const response = await fetch(API_URL, {
+
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify(newProduct),
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao cadastrar");
+      }
+
+      // RECARREGA PRODUTOS
+      await carregarProdutos();
+
+      setMessage({
+        type: "success",
+        text: "Produto cadastrado com sucesso!",
+      });
+
+      setFormData({
+        nome: "",
+        registro: "",
+        volume: "",
+        comprimento: "",
+        largura: "",
+        altura: "",
+        descricao: "",
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      setMessage({
+        type: "error",
+        text: "Erro ao cadastrar produto",
+      });
     }
-
-    const newProduct = {
-      id: Date.now().toString(),
-      nome: formData.nome,
-      registro: formData.registro,
-      volume: calculatedVolume || undefined,
-      comprimento: !useVolume ? parseFloat(formData.comprimento) : undefined,
-      largura: !useVolume ? parseFloat(formData.largura) : undefined,
-      altura: !useVolume ? parseFloat(formData.altura) : undefined,
-      descricao: formData.descricao,
-      dataRegistro: new Date().toLocaleDateString("pt-BR"),
-    };
-
-    setProducts((prev) => [newProduct, ...prev]);
-    setMessage({ type: "success", text: "Produto cadastrado com sucesso!" });
-
-    if (onProductAdded) {
-      onProductAdded(newProduct);
-    }
-
-    // Reset form
-    setFormData({
-      nome: "",
-      registro: "",
-      volume: "",
-      comprimento: "",
-      largura: "",
-      altura: "",
-      descricao: "",
-    });
 
     setTimeout(() => setMessage(null), 3000);
   };
 
-  const handleDeleteProduct = (id) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    setMessage({ type: "success", text: "Produto removido com sucesso!" });
-    setTimeout(() => setMessage(null), 2000);
-  };
+  const handleDeleteProduct = async (sku) => {
+
+  try {
+
+    const response = await fetch(
+      `${API_URL}/${sku}`,
+      {
+        method: "DELETE",
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Erro ao remover");
+    }
+
+    await carregarProdutos();
+
+    setMessage({
+      type: "success",
+      text: "Produto removido com sucesso!",
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    setMessage({
+      type: "error",
+      text: "Erro ao remover produto",
+    });
+  }
+
+  setTimeout(() => setMessage(null), 3000);
+};
 
   return (
     <div className="product-registration">
@@ -149,18 +262,6 @@ export default function ProductRegistration({ onProductAdded }) {
                 />
               </div>
 
-              <div className="form-group">
-                <label htmlFor="registro">SKU *</label>
-                <input
-                  id="registro"
-                  type="text"
-                  name="registro"
-                  value={formData.registro}
-                  onChange={handleInputChange}
-                  placeholder="Ex: REG-2024-001"
-                  className="form-input"
-                />
-              </div>
             </div>
 
             <div className="form-section">
@@ -336,11 +437,11 @@ export default function ProductRegistration({ onProductAdded }) {
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => handleDeleteProduct(product.id)}
+                    onClick={() => handleDeleteProduct(product.registro)}
                     className="btn-delete"
                   >
                     Remover
-                  </Button>
+                  </Button> 
                 </Card>
               ))}
             </div>

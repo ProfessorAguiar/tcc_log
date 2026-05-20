@@ -22,7 +22,7 @@ export default function ProductRegistration({
   const [useVolume, setUseVolume] = useState(true);
   const [message, setMessage] = useState(null);
   const [showForm, setShowForm] = useState(true);
-  const API_URL = "http://localhost:5500/produtos";
+  const API_URL = "https://back-end-log.onrender.com/produtos";
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({

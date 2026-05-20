@@ -11,7 +11,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
     const [products, setProducts] = useState([]);
 
-  const API_URL = "http://localhost:5500/produtos";
+  const API_URL = "https://back-end-log.onrender.com/produtos";
   const handleProductAdded = async () => {
     await carregarProdutos();
   };
@@ -52,7 +52,7 @@ export default function Home() {
     try {
 
       const response = await fetch(
-        `http://localhost:5500/produtos/${sku}`,
+        `https://back-end-log.onrender.com/produtos/${sku}`,
         {
           method: "DELETE",
         }
